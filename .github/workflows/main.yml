@@ -1,110 +1,28 @@
-name: Process PDF
+name: PDF Processor
 
 on:
   repository_dispatch:
     types: [process_pdf]
 
 jobs:
-  extract-and-callback:
+  process:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     steps:
-      - name: Validate payload
-        run: |
-          set -e
+      - uses: actions/checkout@v3
 
-          if [ -z "${{ github.event.client_payload.file_url }}" ]; then
-            echo "ERROR: file_url is missing"
-            exit 1
-          fi
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
 
-          if [ -z "${{ github.event.client_payload.webhook_url }}" ]; then
-            echo "ERROR: webhook_url is missing"
-            exit 1
-          fi
+      - name: Install dependencies
+        run: pip install pymupdf openai requests supabase
 
-      - name: Download PDF
-        run: |
-          set -e
-
-          URL="${{ github.event.client_payload.file_url }}"
-
-          echo "Downloading: $URL"
-
-          curl -L \
-            --fail \
-            --max-filesize 52428800 \
-            -o /tmp/document.pdf \
-            "$URL"
-
-          file /tmp/document.pdf | grep -q "PDF" || {
-            echo "Not a valid PDF"
-            exit 1
-          }
-
-          echo "PDF size: $(du -sh /tmp/document.pdf | cut -f1)"
-
-      - name: Extract text via PDF service
-        id: extract
-        run: |
-          set -e
-
-          RESPONSE=$(curl -s -X POST \
-            --max-time 120 \
-            -F "file=@/tmp/document.pdf;type=application/pdf" \
-            "${{ secrets.PDF_SERVICE_URL }}/process-pdf")
-
-          STATUS=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('status','error'))")
-
-          if [ "$STATUS" != "success" ]; then
-            echo "PDF service error:"
-            echo "$RESPONSE"
-            exit 1
-          fi
-
-          python3 -c "
-import json
-
-data = json.loads(open('/dev/stdin').read())
-chunks = data.get('text_chunks', [])
-
-text = '\n\n'.join(c.get('text','') for c in chunks)
-
-with open('/tmp/extracted_text.txt', 'w', encoding='utf-8') as f:
-    f.write(text)
-" <<< "$RESPONSE"
-
-      - name: Send result to n8n
-        run: |
-          set -e
-
-          TEXT=$(cat /tmp/extracted_text.txt)
-
-          python3 -c "
-import json
-
-payload = {
-    'text': '''$TEXT''',
-    'file_id': '${{ github.event.client_payload.file_id }}',
-    'file_name': '${{ github.event.client_payload.file_name }}'
-}
-
-with open('/tmp/payload.json', 'w') as f:
-    json.dump(payload, f)
-"
-
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            --fail \
-            --max-time 30 \
-            -d @/tmp/payload.json \
-            "${{ github.event.client_payload.webhook_url }}")
-
-          echo "Webhook response: $HTTP_CODE"
-
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "ERROR: Webhook failed"
-            exit 1
-          fi
+      - name: Run processor
+        run: python process.py
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FILE_URL: ${{ github.event.client_payload.file_url }}
+          FILE_ID: ${{ github.event.client_payload.file_id }}
