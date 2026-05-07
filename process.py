@@ -57,15 +57,14 @@ try:
 
             # Generate Embedding
             result = client.models.embed_content(
-                model="gemini-embedding-001",
-                contents=chunk,
-                config=types.EmbedContentConfig(
-                    task_type="RETRIEVAL_DOCUMENT"
-                )
-            )
+    model="gemini-embedding-001",
+    contents=chunk,
+    config={
+        "output_dimensionality": 768
+    }
+)
 
-            embedding = result.embeddings[0].values
-
+embedding = result.embeddings[0].values
             print("🧬 Embedding size:", len(embedding))
 
             # Save
