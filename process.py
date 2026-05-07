@@ -57,7 +57,7 @@ try:
 
             # Generate Embedding
             result = client.models.embed_content(
-                model="text-embedding-004",
+                model="gemini-embedding-001",
                 contents=chunk,
                 config=types.EmbedContentConfig(
                     task_type="RETRIEVAL_DOCUMENT"
