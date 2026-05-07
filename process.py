@@ -1,7 +1,7 @@
 import requests
 import fitz
 import os
-from google import genai
+import google.generativeai as genai
 from supabase import create_client, Client
 
 print("🚀 Script started (Gemini Mode)")
@@ -20,7 +20,7 @@ if not all([google_api_key, file_url, supabase_url, supabase_key]):
     exit(1)
 
 # 2. Initialize Clients
-client = genai.Client(api_key=google_api_key)
+genai.configure(api_key=google_api_key)
 supabase: Client = create_client(supabase_url, supabase_key)
 print("📄 File URL:", file_url)
 
@@ -43,11 +43,12 @@ try:
             print(f"➡️ Processing chunk {j//1000}...")
 
             # 4. Generate Gemini Embedding (FREE)
-            res = client.models.embed_content(
-                model="embedding-001",
-                contents=chunk
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=chunk,
+                task_type="retrieval_document"
             )
-            embedding = res.embeddings[0].values
+            embedding = result['embedding']
 
             # 5. Insert into Supabase
             data = {
