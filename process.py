@@ -44,7 +44,7 @@ try:
 
             # 4. Generate Gemini Embedding (FREE)
             res = client.models.embed_content(
-                model="text-embedding-004",
+                model="embedding-001",
                 contents=chunk
             )
             embedding = res.embeddings[0].values
