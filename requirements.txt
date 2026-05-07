@@ -1,5 +1,4 @@
 pymupdf
-openai
 requests
 supabase
-google-generativeai
+google-genai
