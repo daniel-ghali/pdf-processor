@@ -1,7 +1,8 @@
 import requests
 import fitz
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from supabase import create_client, Client
 
 print("🚀 Script started (Gemini Mode)")
@@ -20,7 +21,7 @@ if not all([google_api_key, file_url, supabase_url, supabase_key]):
     exit(1)
 
 # 2. Initialize Clients
-genai.configure(api_key=google_api_key)
+client = genai.Client(api_key=google_api_key)
 supabase: Client = create_client(supabase_url, supabase_key)
 print("📄 File URL:", file_url)
 
@@ -40,15 +41,22 @@ try:
 
         for j in range(0, len(text), 1000):
             chunk = text[j:j+1000]
-            print(f"➡️ Processing chunk {j//1000}...")
+            chunk_idx = j // 1000
+            print(f"➡️ Processing chunk {chunk_idx} (size: {len(chunk)} characters)...")
 
             # 4. Generate Gemini Embedding (FREE)
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=chunk,
-                task_type="retrieval_document"
+            result = client.models.embed_content(
+                model="text-embedding-004",
+                contents=chunk,
+                config=types.EmbedContentConfig(task_type=types.TaskType.RETRIEVAL_DOCUMENT)
             )
-            embedding = result['embedding']
+            
+            if not result.embeddings or len(result.embeddings) == 0:
+                print(f"⚠️ Warning: No embeddings returned for chunk {chunk_idx}")
+                continue
+
+            embedding = result.embeddings[0].values
+            print(f"🧬 Embedding generated (dimensions: {len(embedding)})")
 
             # 5. Insert into Supabase
             data = {
@@ -57,8 +65,9 @@ try:
                 "embedding": embedding
             }
             
+            print(f"📤 Saving chunk {chunk_idx} to Supabase...")
             supabase.table("donbosco_documents").insert(data).execute()
-            print(f"✅ Chunk {j//1000} saved to Supabase")
+            print(f"✅ Chunk {chunk_idx} saved successfully")
 
 except Exception as e:
     print(f"❌ Critical Error: {str(e)}")
